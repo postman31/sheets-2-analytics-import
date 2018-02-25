@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+  </head>
+  <style>
+  @import url('https://fonts.googleapis.com/css?family=Roboto');
+  body {
+    font-family: 'Roboto', sans-serif;
+  }
+  #profiles, #upload {
+    padding-top: 0.5em;
+  }
+  .source-input {
+   /* display: block;*/
+    font-size: 90%
+  }
+  .source-input.non-available {
+    color: grey;
+  }
+
+  #upload button {
+    display: inline-block;
+  }
+  #daysnum {
+    width: 4em;
+  }
+  .warning {
+    font-size: 85%;
+    color: grey;
+  }
+  h3,h4 {
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
+    color: darkcyan;
+  }
+  #status {
+    padding-top: 1em;
+    font-size: 90%;
+    color: darkcyan;
+
+  }
+  </style>
+  <script>
+function status(message) {
+  var statusString = document.getElementById('status')
+  statusString.textContent = message
+}
+function clearControls() {
+  var controls = ['upload'] // ,'profiles'
+  controls.forEach( function(id) {
+    var block = document.getElementById(id)
+    block.innerHTML = ''
+  })
+}
+
+function proceedWithUpload(accountId, propertyId, sourceId) {
+  var container = document.getElementById('upload')
+  container.innerHTML = ""
+  var button = document.createElement('button')
+  button.textContent = 'Send Data'
+  button.disabled = true
+  var checkButton = document.createElement('button')
+  checkButton.textContent = 'Check Import'
+  container.appendChild(button)
+  container.appendChild(checkButton)
+  function  switchButtons (check) {
+    if (check) {
+      button.disabled = false
+      status('Everithing is OK. Data can be uploaded now')
+    }  else {
+      status('There was an error. Fix the data and check again')
+    }
+  }
+  checkButton.addEventListener('click', function () {
+    google.script.run.withSuccessHandler(switchButtons).checkHeaders(sourceId)
+  })
+  button.addEventListener('click', function () {
+    function uploadData (check) {
+      function uploadReady() {
+        status('uploaded to Google Analytics')
+        clearControls()
+      }
+      if (check) {
+      status('...uploading data')
+      google.script.run.withSuccessHandler(uploadReady).fakeUpload(accountId, propertyId, sourceId)
+      status('')
+      }
+    }
+    google.script.run.withSuccessHandler(uploadData).checkHeaders(sourceId)
+  })
+}
+
+function getImportRows(wrapperId, name, data, key, labelKey, serverFunction, callback) {
+  var schema = data.schema
+  var container = document.getElementById(wrapperId);
+  container.innerHTML = "<h4>Select view to generate import rows</h4>";
+  var button = document.createElement("button");
+  button.textContent = 'Get Import Rows'
+  button.disabled = true
+  for (var i = 0; i < data.profiles.length; i++) {
+    var chunk = data.profiles[i]
+    var wrapper = document.createElement("div");
+    wrapper.className = 'source-input';
+    var input = document.createElement("input");
+    input.type = 'radio';
+    input.name = name
+    input.id = chunk[key]
+    wrapper.appendChild(input)
+    input.addEventListener('change', function (event) {
+      if (data.schema) button.disabled = false
+    })
+    var label = document.createElement("label");
+    label.for = chunk[key]
+    label.textContent = chunk[labelKey]
+    wrapper.appendChild(label)
+    container.appendChild(wrapper)
+  }
+  button.addEventListener('click', function () {
+    console.log(name)
+    var profileId = document.querySelector('input[name="' + name + '"]:checked').id
+    console.log(profileId)
+    var container = document.getElementById('upload')
+    container.innerHTML = ""
+    if (typeof google.script.run[serverFunction] == 'function') {
+      if (typeof google.script.run.withSuccessHandler()[serverFunction] == 'function') {
+        function getImport() {
+          var days = document.getElementById('daysnum').value
+          var zerocost = document.getElementById('zerocost').checked
+          if (isNaN(days)) days = 7
+          status('Loading')
+          function rowsReady(rowsnum) {
+            if (rowsnum > 0) {
+              status(rowsnum + ' rows loaded')
+              callback()
+            } else {
+              status('No rows loaded. Try another period')
+            }
+          }
+          google.script.run.withSuccessHandler(rowsReady)[serverFunction](profileId, schema, days, zerocost)
+        }
+        google.script.run.withSuccessHandler(getImport).clearUploadRows()
+      }
+    }
+  })
+  if (!schema) {
+    var getSchemaButton = document.createElement("button");
+    getSchemaButton.textContent = 'Add Schema'
+    getSchemaButton.disabled = false
+    getSchemaButton.addEventListener('click', function () {
+      var self = this
+      function schemaReady(something) {
+     // when got schema:
+     // disable this
+        console.log(something)
+        self.disabled = true
+      // get schema with id -->enable button
+      //
+     }
+     google.script.run.withSuccessHandler(schemaReady).promptSchema(data.id)
+    })
+    container.appendChild(getSchemaButton)
+  } else {
+  var settings = document.createElement("div");
+  settings.className = 'settings'
+  var settingsDays = document.createElement("div");
+  var inputDays = document.createElement("input");
+  inputDays.type = 'number';
+  inputDays.id = 'daysnum'
+  inputDays.placeholder = '7'
+  var labelDays = document.createElement("label");
+  labelDays.for = 'daysnum'
+  labelDays.className = 'source-input'
+  labelDays.textContent = '  get data for N days ago: '
+  settingsDays.appendChild(labelDays)
+  settingsDays.appendChild(inputDays)
+  settings.appendChild(settingsDays)
+  var settingsCost = document.createElement("div");
+  var inputZeroCost = document.createElement("input");
+  inputZeroCost.type = 'checkbox';
+  inputZeroCost.id = 'zerocost'
+  var labelZeroCost = document.createElement("label");
+  labelZeroCost.for = 'zerocost'
+  labelZeroCost.className = 'source-input'
+  labelZeroCost.textContent = 'include non zero cost rows'
+
+  settingsCost.appendChild(inputZeroCost)
+  settingsCost.appendChild(labelZeroCost)
+  settings.appendChild(settingsCost)
+  container.appendChild(settings)
+  container.appendChild(button)
+  }
+}
+
+function showSources (sources) {
+  var container = document.getElementById('sourcelist');
+  var checked = null
+  var profiles = {}
+  var schemas = {}
+  var missingSchema = false
+  for (var i = 0; i < sources.length; i++) {
+    var source = sources[i]
+    profiles[source.id] = source.profilesLinked.map(function(profileId) {
+      for (var k = 0; k < source.profiles.length; k++ ) {
+        if (source.profiles[k].id == profileId) return source.profiles[k]
+      }
+    })
+    schemas[source.id] = source.schema
+    var wrapper = document.createElement("div");
+    wrapper.className = 'source-input';
+    var input = document.createElement("input");
+    input.type = 'radio';
+    input.name = 'source'
+    input.id = source.id
+    input.account = source.accountId
+    input.property = source.webPropertyId
+    if (!source.schema) {
+      wrapper.classList.add('non-available')
+      missingSchema = true
+    }
+    wrapper.appendChild(input)
+    var label = document.createElement("label");
+    label.for = source.id;
+    label.textContent = source.propertyName + ' > ' + source.name + ((!source.schema) ? ' *': '')
+    wrapper.appendChild(label)
+    container.appendChild(wrapper)
+    input.addEventListener('change', function (event) {
+      status('')
+      if (this !== checked) {
+        checked = this
+        if (!schemas[checked.id]) {
+        var upload = document.getElementById('upload')
+        upload.innerHTML = '';
+        }
+        getImportRows('profiles', 'profiles',
+                      {'profiles': profiles[checked.id], 'schema': schemas[checked.id], 'id': checked.id},
+                      'id', 'name', 'runReport', function () {
+          //status('Rows loaded')
+          proceedWithUpload(checked.account, checked.property, checked.id)
+        })
+      } else {
+        console.log(source.profilesLinked)
+      }
+    });
+  }
+  if (missingSchema) {
+    var warning = document.createElement('div')
+    warning.textContent = 'schemas for sourses marked * are not availabe'
+    warning.classList.add('warning')
+    container.appendChild(warning)
+  }
+  var loading = document.getElementById('loading')
+  loading.style.display = "none"
+}
+
+google.script.run.withSuccessHandler(showSources)
+          .listAccounts();
+  </script>
+  <body>
+  <h3>Select Data Source to upload</h3>
+  <p id="loading">loading... This may take few minutes.</p>
+  <div id="sourcelist">
+  </div>
+  <div id="profiles">
+  </div>
+  <div id="upload"></div>
+  <div id="status"></div>
+  </body>
+</html>

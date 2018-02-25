@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <title>test something</title>
+  <style media="screen">
+    textarea {
+      width: 100%;
+      display: block;
+      margin-bottom: 15px;
+    }
+    button {
+      display: block;
+    }
+  </style>
+  </head>
+  <body id="<?= source ?>">
+    <div class="text">
+      Put your schema inside
+    </div>
+    <textarea name="textarea" id="schema" rows="8">Put your schema description here</textarea>
+    <button id="save">Save</button>
+    <div id="message"></div>
+  </body>
+  <script>
+  var sourceId = document.getElementsByTagName('body')[0].id
+  var button = document.getElementById('save')
+  var message = document.getElementById('message')
+  message.textContent = ''
+  button.addEventListener('click', function () {
+    var sc = document.getElementById('schema')
+    var text = sc.value
+
+    var patterns = ['These columns must be provided: ',
+    'At least one of these columns must be provided: ',
+    'Any number of these columns may be provided: ']
+    patterns.forEach(function (pattern) {
+    text = text.replace(pattern, '').trim()
+    })
+    // console.log(schema);
+    text = text.split('\n').filter(function(el){ return (el.match('ga:'))})
+    var schema = {
+    all: text[0],
+    one: text[1],
+    any: text[2]
+    }
+
+    if (schema.all  && schema.one && schema.any ) {
+      message.textContent = 'text is ok'
+      console.log(schema);
+      function resetAndClose() {
+        function closePrompt() {
+           google.script.host.close()
+        }
+        google.script.run.withSuccessHandler(closePrompt).manageUploads()
+      }
+      google.script.run.withSuccessHandler(resetAndClose).addSchema(sourceId, schema)
+    } else {
+      message.textContent = 'wrong schema description'
+    }
+
+  })
+  </script>
+</html>
