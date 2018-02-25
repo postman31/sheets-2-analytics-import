@@ -198,6 +198,10 @@ function showSources (sources) {
   var profiles = {}
   var schemas = {}
   var missingSchema = false
+  if (!sources) {
+    status('No Data Import Sources found. Go to Analytics and create one')
+    return
+  }
   for (var i = 0; i < sources.length; i++) {
     var source = sources[i]
     profiles[source.id] = source.profilesLinked.map(function(profileId) {

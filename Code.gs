@@ -101,6 +101,10 @@ function addSchema(sourceId, schema) {
 function listAccounts() {
   clearUploadRows()
   if (test.DATA_) return updateWithSchemas(test.DATA_)
+  if (!Analytics) {
+    myAlert('Analytis API is not enabled')
+    return false
+  }
   var accounts = Analytics.Management.AccountSummaries.list();
   // var summary = Analytics.Management.AccountSummaries.list();
   if (accounts.items && accounts.items.length) {
@@ -253,3 +257,4 @@ function manageUploads() {
   .setTitle('Google Analytics Data Import');
   SpreadsheetApp.getUi().showSidebar(sidebarHtmlOutput);
 }
+var test = {}
