@@ -13,10 +13,21 @@
   }
   .source-input {
    /* display: block;*/
-    font-size: 90%
+   font-size: 85%
+  }
+  .session-import, .manual-import {
+     font-size: 85%
+
   }
   .source-input.non-available {
     color: grey;
+  }
+  h5 {
+    font-size: 1em
+  }
+
+  .manual-import input[type*="date"]{
+    display: block;
   }
 
   #upload button {
@@ -29,7 +40,7 @@
     font-size: 85%;
     color: grey;
   }
-  h3,h4 {
+  h3,h4,h5 {
     margin-top: 0.5em;
     margin-bottom: 0.5em;
     color: darkcyan;
@@ -42,6 +53,11 @@
   }
   </style>
   <script>
+
+function twoDigits (value) {
+  return (value < 10) ? '0'+value : value
+}
+
 function status(message) {
   var statusString = document.getElementById('status')
   statusString.textContent = message
@@ -56,7 +72,7 @@ function clearControls() {
 
 function proceedWithUpload(accountId, propertyId, sourceId) {
   var container = document.getElementById('upload')
-  container.innerHTML = ""
+  container.innerHTML = ''
   var button = document.createElement('button')
   button.textContent = 'Send Data'
   button.disabled = true
@@ -92,16 +108,56 @@ function proceedWithUpload(accountId, propertyId, sourceId) {
 }
 
 function getImportRows(wrapperId, name, data, key, labelKey, serverFunction, callback) {
+  function addInput(type, container, id, labelText, placeholder) {
+  var inputElm = document.createElement("input");
+  inputElm.type = type
+  inputElm.id = id
+  if (placeholder) inputDays.placeholder = placeholder
+  var labelElm = document.createElement("label");
+  labelElm.for = id
+  labelElm.textContent = labelText
+  container.appendChild(labelElm)
+  container.appendChild(inputElm)
+    return inputElm
+  }
+
   var schema = data.schema
   var container = document.getElementById(wrapperId);
-  container.innerHTML = "<h4>Select view to generate import rows</h4>";
+  container.innerHTML = ''
+  var title = document.createElement('h4')
+  container.appendChild(title)
+ // var subtitle = document.createElement('h5')
+ // container.appendChild(subtitle)
+  if (!schema) {
+    title.textContent = 'No Data set schema for this Data Set'
+    var getSchemaButton = document.createElement("button");
+    getSchemaButton.textContent = 'Add Schema'
+    getSchemaButton.disabled = false
+    getSchemaButton.addEventListener('click', function () {
+      var self = this
+      function schemaReady(something) {
+        console.log(something)
+        self.disabled = true
+     }
+     google.script.run.withSuccessHandler(schemaReady).promptSchema(data.id)
+    })
+    container.appendChild(getSchemaButton)
+  } else {
+  title.textContent = 'How would you like to prepare Import rows'
+  // Start Of GA Session import function
+  var sessionImport = document.createElement('div')
+  sessionImport.innerHTML = ''
+  var sessionImportSubtitle = document.createElement('h5')
+  sessionImport.appendChild(sessionImportSubtitle)
+  sessionImport.className = 'session-import'
+  sessionImportSubtitle.textContent = '...import all available cost and sessions rows from GA'
   var button = document.createElement("button");
   button.textContent = 'Get Import Rows'
   button.disabled = true
   for (var i = 0; i < data.profiles.length; i++) {
     var chunk = data.profiles[i]
     var wrapper = document.createElement("div");
-    wrapper.className = 'source-input';
+    //wrapper.className = 'source-input';
     var input = document.createElement("input");
     input.type = 'radio';
     input.name = name
@@ -114,7 +170,7 @@ function getImportRows(wrapperId, name, data, key, labelKey, serverFunction, cal
     label.for = chunk[key]
     label.textContent = chunk[labelKey]
     wrapper.appendChild(label)
-    container.appendChild(wrapper)
+    sessionImport.appendChild(wrapper) // was container
   }
   button.addEventListener('click', function () {
     console.log(name)
@@ -143,24 +199,6 @@ function getImportRows(wrapperId, name, data, key, labelKey, serverFunction, cal
       }
     }
   })
-  if (!schema) {
-    var getSchemaButton = document.createElement("button");
-    getSchemaButton.textContent = 'Add Schema'
-    getSchemaButton.disabled = false
-    getSchemaButton.addEventListener('click', function () {
-      var self = this
-      function schemaReady(something) {
-     // when got schema:
-     // disable this
-        console.log(something)
-        self.disabled = true
-      // get schema with id -->enable button
-      //
-     }
-     google.script.run.withSuccessHandler(schemaReady).promptSchema(data.id)
-    })
-    container.appendChild(getSchemaButton)
-  } else {
   var settings = document.createElement("div");
   settings.className = 'settings'
   var settingsDays = document.createElement("div");
@@ -170,7 +208,7 @@ function getImportRows(wrapperId, name, data, key, labelKey, serverFunction, cal
   inputDays.placeholder = '7'
   var labelDays = document.createElement("label");
   labelDays.for = 'daysnum'
-  labelDays.className = 'source-input'
+  labelDays.className = 'session-controls'
   labelDays.textContent = '  get data for N days ago: '
   settingsDays.appendChild(labelDays)
   settingsDays.appendChild(inputDays)
@@ -181,15 +219,84 @@ function getImportRows(wrapperId, name, data, key, labelKey, serverFunction, cal
   inputZeroCost.id = 'zerocost'
   var labelZeroCost = document.createElement("label");
   labelZeroCost.for = 'zerocost'
-  labelZeroCost.className = 'source-input'
+  labelZeroCost.className = 'session-controls'
   labelZeroCost.textContent = 'include non zero cost rows'
 
   settingsCost.appendChild(inputZeroCost)
   settingsCost.appendChild(labelZeroCost)
   settings.appendChild(settingsCost)
-  container.appendChild(settings)
-  container.appendChild(button)
-  }
+  sessionImport.appendChild(settings) // sessionImport
+  sessionImport.appendChild(button)
+  container.appendChild(sessionImport)
+  // end of session data import
+  // start source import
+//  var sourceImport = document.createElement('div')
+//  sourceImport.innerHTML = ''
+//  var sourceImportSubtitle = document.createElement('h5')
+//  sourceImport.appendChild(sourceImportSubtitle)
+//  sourceImportSubtitle.textContent = 'Create rows from GA source and Mediums'
+//  var sourceButton = document.createElement('button')
+//  sourceButton.textContent = 'Create rows from sources'
+//  sourceImport.appendChild(sourceButton)
+//  container.appendChild(sourceImport)
+  // end of source data import
+  // start manual upload
+  var manualImport = document.createElement('div')
+  manualImport.innerHTML = ''
+  manualImport.className = 'manual-import'
+  var manualImportSubtitle = document.createElement('h5')
+  manualImport.appendChild(manualImportSubtitle)
+  manualImportSubtitle.textContent = 'OR create rows from monthly cost'
+  var startInput = addInput('date', manualImport, 'startdate', 'start', null)
+  var endInput = addInput('date', manualImport, 'enddate', 'end', null)
+  var manualButton = document.createElement('button')
+  manualButton.disabled = true
+  var today = new Date()
+  var dateString = today.getFullYear() + '-' + twoDigits(today.getMonth() + 1) +'-'+ twoDigits(today.getDate());
+  startInput.max = dateString
+  endInput.max = dateString
+  endInput.value = dateString
+  var inputs = [endInput, startInput]
+  inputs.forEach(function(dateInput) {
+    dateInput.addEventListener('change', function (event) {
+      if (this == endInput) {
+        startInput.max = this.value
+      }
+      console.log('date changed')
+      console.log('dates %s1, %s2', document.getElementById('startdate').value, document.getElementById('enddate').value )
+      if (document.getElementById('startdate').value && document.getElementById('enddate').value ) {
+        manualButton.disabled = false
+      }
+    })
+  })
+  manualButton.textContent = 'Create rows from monthly cost'
+  manualImport.appendChild(manualButton)
+  manualButton.addEventListener('click', function(event) {
+
+    function stingToObj(dateString) {
+      var splitted = dateString.split('-')
+      return {
+        year: splitted[0],
+        month: splitted[1],
+        day: splitted[2]
+      }
+    }
+    var startString = document.getElementById('startdate').value
+    var endString = document.getElementById('enddate').value
+    function monthlyRowsReady (flag) {
+      if (!flag) {
+        status('No valid monthly costs. Check your monthly sheet')
+        return false
+      }
+      console.log(startString + ':' + endString)
+      console.log(flag)
+      callback()
+    }
+    google.script.run.withSuccessHandler(monthlyRowsReady).generateMonthlyTable(schema, stingToObj(startString), stingToObj(endString));
+  })
+  container.appendChild(manualImport)
+  // end of manual upload
+  } // End Of Schema is available block
 }
 
 function showSources (sources) {
@@ -198,10 +305,6 @@ function showSources (sources) {
   var profiles = {}
   var schemas = {}
   var missingSchema = false
-  if (!sources) {
-    status('No Data Import Sources found. Go to Analytics and create one')
-    return
-  }
   for (var i = 0; i < sources.length; i++) {
     var source = sources[i]
     profiles[source.id] = source.profilesLinked.map(function(profileId) {
@@ -239,7 +342,6 @@ function showSources (sources) {
         getImportRows('profiles', 'profiles',
                       {'profiles': profiles[checked.id], 'schema': schemas[checked.id], 'id': checked.id},
                       'id', 'name', 'runReport', function () {
-          //status('Rows loaded')
           proceedWithUpload(checked.account, checked.property, checked.id)
         })
       } else {

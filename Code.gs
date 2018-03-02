@@ -64,6 +64,11 @@ function updateWithSchemas(sources) {
     sources[index].schema = null
   });
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('schemas')
+  var monthlySheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('monthly costs')
+  if (!monthlySheet) {
+    var costsSheet = SpreadsheetApp.getActiveSpreadsheet().insertSheet('monthly costs')
+    costsSheet.appendRow('ga:medium,ga:source,ga:adCost'.split(','))
+  }
   if (!sheet) {
     sheet = SpreadsheetApp.getActiveSpreadsheet().insertSheet('schemas')
     return sources
@@ -101,10 +106,6 @@ function addSchema(sourceId, schema) {
 function listAccounts() {
   clearUploadRows()
   if (test.DATA_) return updateWithSchemas(test.DATA_)
-  if (!Analytics) {
-    myAlert('Analytis API is not enabled')
-    return false
-  }
   var accounts = Analytics.Management.AccountSummaries.list();
   // var summary = Analytics.Management.AccountSummaries.list();
   if (accounts.items && accounts.items.length) {
@@ -223,6 +224,60 @@ function runReport(profileId, schema, days, nonZeroCost) {
   }
 }
 
+function runSourcesReport(profileId, schema, days, nonZeroCost) {
+  var daysCount = days
+  if (!days) daysCount = 7
+  var today = new Date();
+  var oneWeekAgo = new Date(today.getTime() - daysCount * 24 * 60 * 60 * 1000);
+
+  var startDate = Utilities.formatDate(oneWeekAgo, Session.getScriptTimeZone(),
+      'yyyy-MM-dd');
+  var endDate = Utilities.formatDate(today, Session.getScriptTimeZone(),
+      'yyyy-MM-dd');
+
+  var tableId = 'ga:' + profileId;
+  var metric = schema.one + ',ga:sessions'
+  //{"all":"ga:date, ga:medium, ga:source","one":"ga:adCost, ga:adClicks","any":"ga:campaign"}
+  var filters = 'ga:medium!@organic;ga:source!@(direct)' + (!nonZeroCost ? ';ga:adCost==0;' : ';') + 'ga:sourceMedium!@google / cpc'
+  var options = {
+    'dimensions': schema.all.replace('ga:date, ','') + ',' + schema.any,
+    'sort': '-ga:sessions,ga:source',
+    'include-empty-rows': true,
+    'filters': filters
+  };
+  Logger.log(options)
+  var report = Analytics.Data.Ga.get(tableId, startDate, endDate, metric,
+      options);
+
+  if (report.rows) {
+    // clear the upload Sheet
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('upload')
+    if (!sheet) sheet = SpreadsheetApp.getActiveSpreadsheet().insertSheet('upload')
+    sheet.clear()
+    // get headers
+    var headers = report.columnHeaders.map(function (header) {
+      return header.name
+    })
+    headers.unshift('reserved')
+    // get rows
+    var reportRows = report.rows.reduce(function(unshifted, row) {
+      unshifted.push(['--'].concat(row))
+      return unshifted
+    }, [])
+    // form the export
+    reportRows.unshift(headers)
+    Logger.log(reportRows)
+    // get range 1 1 and paste
+    var range=sheet.getRange(1, 1, reportRows.length, headers.length)
+    range.setValues(reportRows)
+    return reportRows.length - 1
+  } else {
+    Logger.log('no data in report')
+  }
+}
+
+
+
 function checkHeaders(sourceId) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('upload')
   var header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0]
@@ -257,4 +312,61 @@ function manageUploads() {
   .setTitle('Google Analytics Data Import');
   SpreadsheetApp.getUi().showSidebar(sidebarHtmlOutput);
 }
+
+
+function generateMonthlyTable(schema, startDateObject, endDateObject) {
+  function daysInMonth (month, year) {
+    return new Date(year, month, 0).getDate();
+  }
+  function twoDigits (value) {
+    return (value < 10) ? '0'+value : value
+  }
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('upload')
+  if (!sheet) sheet = SpreadsheetApp.getActiveSpreadsheet().insertSheet('upload')
+  clearUploadRows()
+  var monthlySheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('monthly costs')
+  if (!monthlySheet) {
+    SpreadsheetApp.getActiveSpreadsheet().insertSheet('monthly costs')
+    return false
+  }
+  var monthlyHeaders = monthlySheet.getRange(1, 1, 1, monthlySheet.getLastColumn()).getValues()[0]
+  var check = 'ga:medium,ga:source,ga:adCost'.split(',')
+  for (var i = 0; i < check.length; i++) {
+    if (monthlyHeaders.indexOf(check[i]) == -1) {
+      return false
+    }
+  }
+  monthlyHeaders.unshift('ga:date')
+  var export = []
+  try {
+    var monthlyBudgets = monthlySheet.getRange(2, 1, monthlySheet.getLastRow()-1, monthlySheet.getLastColumn()).getValues()
+  } catch (e) {
+    return false
+  }
+  //sheet.appendRow(monthlyHeaders)
+  sheet.appendRow(monthlyHeaders)
+
+  for (var i = 0; i < monthlyBudgets.length; i++) {
+    for (var year = startDateObject.year; year <= endDateObject.year; year++) {
+      var month = (year == startDateObject.year) ? Number(startDateObject.month) : 1
+      var endMonth = (year == endDateObject.year) ? Number(endDateObject.month) : 12
+      for (month; month <= endMonth; month++) {
+        var indexDay = (year == startDateObject.year && month == startDateObject.month) ? Number(startDateObject.day) : 1
+        var endDay = (year == endDateObject.year && month == endDateObject.month) ? Number(endDateObject.day) : daysInMonth(year, month)
+        for (indexDay; indexDay <= endDay; indexDay++) {
+
+          var rowContents = [year + twoDigits(month) + twoDigits(indexDay)].concat(monthlyBudgets[i])
+          var costIndex = monthlyHeaders.indexOf('ga:adCost')
+          rowContents[costIndex] = (rowContents[costIndex] / daysInMonth (month, year)).toFixed(2)
+          export.push(rowContents)
+        }
+      }
+    }
+  }
+//  Logger.log(export)
+  sheet.getRange(sheet.getLastRow() + 1, 1, export.length, export[0].length).setValues(export)
+  return true
+}
+
+
 var test = {}
